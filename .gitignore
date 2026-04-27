@@ -1,0 +1,14 @@
+# 1. Bloquear todo por defecto
+*
+# Bloquear también el contenido de todas las carpetas
+/*/
+
+# 2. Permitir el archivo .gitignore (para que GitHub sepa qué ignorar)
+!.gitignore
+
+# 3. Permitir TODOS los archivos .py que estén en la carpeta principal
+!*.py
+
+# 4. (Opcional) Si tienes archivos .py dentro de subcarpetas que quieras subir:
+# !**/
+# !**/*.py
