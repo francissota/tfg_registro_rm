@@ -41,11 +41,11 @@ for i in [1]:
     (Metric0Weight 1.0)
 
     // High penalty to prohibit internal deformations
-    (Metric1Weight 50.0)
+    (Metric1Weight 500.0)
     (NumberOfHistogramBins 64)
     (UseFastAndLowMemoryVersion "true")
 
-    (FinalGridSpacingInPhysicalUnits 25.0 25.0 35.0)
+    (FinalGridSpacingInPhysicalUnits 25.0)
 
     // Optimizer settings
     (NumberOfResolutions 3)
@@ -58,7 +58,7 @@ for i in [1]:
     (AutomaticTransformInitialization "false")
     (ASGDParameterEstimationMethod "Original")
 
-    (ImagePyramidSchedule 4 4 1  2 2 1  1 1 1)
+    (ImagePyramidSchedule 4 4 2  2 2 1  1 1 1)
 
     // Sampler parameters
     (NumberOfSpatialSamples 4096)
