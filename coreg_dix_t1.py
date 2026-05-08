@@ -7,12 +7,13 @@ import pandas as pd
 
 metricas = []
 
-for i in [1]:
+for i in [14]:
     
     main_repo_path = r"D:\tfg_francis\RESPECT_Co-Registration_Module-main"
-    paciente_id = f"5{i:02d}_01"
-    folder = fr"D:\tfg_francis\RESPECT_CENTER01\{paciente_id}"
-    folder_01 = os.path.join(folder, f"5{i:02d}-01_v2a")
+    paciente_id = f"5{i:02d}_04"
+    folder = fr"D:\tfg_francis\RESPECT_CENTER004\{paciente_id}"
+    session_name = "02"
+    folder_01 = os.path.join(folder, session_name)
     
     param_content = """// DIXON to T1 PARAMETERS
 
@@ -127,7 +128,7 @@ for i in [1]:
     try:
         fixed_path = [f for f in glob.glob(os.path.join(folder_01, '*_T1w*')) if os.path.isdir(f)][0]
         water_path = [f for f in glob.glob(os.path.join(folder_01, "*_IP*")) if os.path.isdir(f)][0]
-        fat_path = [f for f in glob.glob(os.path.join(folder_01, "*FAT*")) if os.path.isdir(f)][0]
+        fat_path = [f for f in glob.glob(os.path.join(folder_01, "*_F*")) if os.path.isdir(f)][0]
     except IndexError:
         print(f"ERROR: Faltan carpetas para el paciente {paciente_id}")
         continue
@@ -142,7 +143,6 @@ for i in [1]:
     print(f"Grasa (móvil): {fat_name}")
 
     multistage = "trad"
-    session_name = f"5{i:02d}-01_v2a"
 
     command = (
         f'docker run --name {container_name} '

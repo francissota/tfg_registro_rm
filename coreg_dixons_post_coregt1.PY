@@ -7,13 +7,13 @@ import pandas as pd
 
 metricas = []
 
-for i in [5]:
+for i in [6, 16, 22]:
     
     main_repo_path = r"D:\tfg_francis\RESPECT_Co-Registration_Module-main"
-    paciente_id = f"5{i:02d}_02"
-    sesion_fija = "02"
-    for sesion in ["01"]:
-        patient_folder = fr"D:\tfg_francis\SANOS\{paciente_id}"
+    paciente_id = f"5{i:02d}_01"
+    sesion_fija = "03"
+    for sesion in ["02", "01"]:
+        patient_folder = fr"D:\tfg_francis\RESPECT_CENTER01\{paciente_id}"
         folder_fixed = os.path.join(patient_folder, sesion_fija)  
         folder_moving = os.path.join(patient_folder, sesion)     
         
@@ -135,7 +135,7 @@ for i in [5]:
                 raise IndexError(f"No existe la carpeta Fija en {fixed_path}")
 
             water_path = [f for f in glob.glob(os.path.join(folder_moving, '*_IP*')) if os.path.isdir(f) and any(glob.glob(os.path.join(f, '*.IMA')) or glob.glob(os.path.join(f, '*.dcm')))][0]
-            fat_path = [f for f in glob.glob(os.path.join(folder_moving, '*_F*')) if os.path.isdir(f) and any(glob.glob(os.path.join(f, '*.IMA')) or glob.glob(os.path.join(f, '*.dcm')))][0]
+            fat_path = [f for f in glob.glob(os.path.join(folder_moving, '*FAT*')) if os.path.isdir(f) and any(glob.glob(os.path.join(f, '*.IMA')) or glob.glob(os.path.join(f, '*.dcm')))][0]
         except IndexError as e:
             print(f"ERROR: Faltan carpetas para el paciente {paciente_id}")
             continue

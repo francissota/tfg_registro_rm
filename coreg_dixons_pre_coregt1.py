@@ -7,7 +7,7 @@ import pandas as pd
 
 metricas = []
 
-for i in [4, 11]:
+for i in [4]:
     
     main_repo_path = r"D:\tfg_francis\RESPECT_Co-Registration_Module-main"
     paciente_id = f"5{i:02d}_02"

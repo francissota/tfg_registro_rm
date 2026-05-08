@@ -8,14 +8,15 @@ import seaborn as sns
 from itertools import combinations
 
 
-FRANCIS_DIR    = "Francis"          # carpeta con las máscaras de Francis
+FRANCIS_DIR    = "mascaras_sanos_UNAV" 
+ITALIA_DIR     = "mascaras_sanos_italia"  #carpeta con las mascaras de Italia
 SESSION_SUFFIX = {1: "v2a", 2: "v2b", 3: "v3"}
 
 
 def cargar_mascaras_sesion(pac_id, n_ses):
     
     suf  = SESSION_SUFFIX[n_ses]
-    base = os.path.join(FRANCIS_DIR, f"{pac_id}_02_{suf}")
+    base = os.path.join(ITALIA_DIR, f"{pac_id}_01_{suf}")
 
     ruta_rinon  = f"{base}.nii.gz"
     ruta_pelvis = f"{base}_pelvis.nii.gz"
@@ -41,8 +42,24 @@ def cargar_mascaras_sesion(pac_id, n_ses):
 def mascara_base_existe(pac_id, n_ses_base):
     suf = SESSION_SUFFIX[n_ses_base]
     return os.path.exists(
-        os.path.join(FRANCIS_DIR, f"{pac_id}_02_{suf}.nii.gz")
+        os.path.join(ITALIA_DIR, f"{pac_id}_01_{suf}.nii.gz")
     )
+
+
+def resample_mascara_a_espacio(img_mascara_sitk, img_target_sitk):
+    """Remuestrea una máscara al espacio físico de img_target.
+
+    Usa las coordenadas físicas (origin + direction + spacing) de ambas
+    imágenes para hacer la conversión correcta, independientemente de si
+    las direcciones son distintas (p.ej. eje Y flipado entre sesiones).
+    Interpolación NearestNeighbor para preservar etiquetas enteras.
+    """
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(img_target_sitk)
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(sitk.Transform())   # transformación identidad
+    return resampler.Execute(img_mascara_sitk)
 
 
 def erosion(arr_rinon, img_ref, ruta_guardado):
@@ -164,12 +181,22 @@ def generar_mascara_validacion(par, seno, quistes, img_ref, ruta_guardado):
     return img
 
 
-def buscar_archivo_nii(carpeta, extensiones=("*.nii.gz", "*.nii")):
+def buscar_archivo_nii(carpeta, extensiones=("*.nii.gz", "*.nii"), contiene=None):
     for ext in extensiones:
         archivos = glob.glob(os.path.join(carpeta, ext))
         if archivos:
-            return archivos[0]
-    raise FileNotFoundError(f"No se encontraron archivos NIfTI en: {carpeta}")
+            if contiene:
+                # Filtramos los archivos que contienen la palabra clave en su nombre
+                archivos_filtrados = [a for a in archivos if contiene in os.path.basename(a)]
+                if archivos_filtrados:
+                    return archivos_filtrados[0]
+            else:
+                return archivos[0]
+                
+    mensaje = f"No se encontraron archivos NIfTI en: {carpeta}"
+    if contiene:
+        mensaje = f"No se encontraron archivos NIfTI que contengan '{contiene}' en: {carpeta}"
+    raise FileNotFoundError(mensaje)
 
 
 def _histograma(valores, titulo, ruta_png):
@@ -562,18 +589,17 @@ def generar_excel_grupo(todos_datos, ruta_excel):
 if __name__ == "__main__":
 
     PACIENTES = [
-        {"id": 501, "codigo": "P501", "nombre": "Paciente 501", "mascara_sesion": 1}, 
-        {"id": 504, "codigo": "P504", "nombre": "Paciente 504", "mascara_sesion": 2}, 
-        {"id": 505, "codigo": "P505", "nombre": "Paciente 505", "mascara_sesion": 2}, #outlier
+        {"id": 501, "codigo": "P501", "nombre": "Paciente 501", "mascara_sesion": 2}, 
         {"id": 506, "codigo": "P506", "nombre": "Paciente 506", "mascara_sesion": 3}, 
-        {"id": 507, "codigo": "P507", "nombre": "Paciente 507", "mascara_sesion": 1},
-        {"id": 508, "codigo": "P508", "nombre": "Paciente 508", "mascara_sesion": 2}, 
-        {"id": 510, "codigo": "P510", "nombre": "Paciente 510", "mascara_sesion": 1},
-        {"id": 511, "codigo": "P511", "nombre": "Paciente 511", "mascara_sesion": 1},
-        {"id": 513, "codigo": "P513", "nombre": "Paciente 513", "mascara_sesion": 2}, 
-        {"id": 514, "codigo": "P514", "nombre": "Paciente 514", "mascara_sesion": 3},
-        {"id": 516, "codigo": "P516", "nombre": "Paciente 516", "mascara_sesion": 3},
-        {"id": 517, "codigo": "P517", "nombre": "Paciente 517", "mascara_sesion": 3} #outlier
+        {"id": 508, "codigo": "P508", "nombre": "Paciente 508", "mascara_sesion": 1},
+        {"id": 511, "codigo": "P511", "nombre": "Paciente 511", "mascara_sesion": 2}, 
+        {"id": 512, "codigo": "P512", "nombre": "Paciente 512", "mascara_sesion": 2}, 
+        {"id": 513, "codigo": "P513", "nombre": "Paciente 513", "mascara_sesion": 2},
+        {"id": 514, "codigo": "P514", "nombre": "Paciente 514", "mascara_sesion": 2}, 
+        {"id": 516, "codigo": "P516", "nombre": "Paciente 516", "mascara_sesion": 1}, 
+        {"id": 518, "codigo": "P518", "nombre": "Paciente 518", "mascara_sesion": 2},
+        {"id": 520, "codigo": "P520", "nombre": "Paciente 520", "mascara_sesion": 2}, 
+        {"id": 522, "codigo": "P522", "nombre": "Paciente 522", "mascara_sesion": 2}, 
     ]
 
     todos_datos = {}
@@ -600,39 +626,66 @@ if __name__ == "__main__":
 
         for n_ses in [1, 2, 3]:
             ruta_g      = f"{pac_id}_0{n_ses}"
-            base_folder = f"SANOS/{pac_id}_02/0{n_ses}"
+            base_folder = f"RESPECT_CENTER01/{pac_id}_01/0{n_ses}"
             os.makedirs(f"resultados_{ruta_g}_mascara_0{mascara_base}", exist_ok=True)
             try:
                 if mascara_base == n_ses:
                     ruta_ip    = buscar_archivo_nii(
-                        os.path.join(base_folder, r"coreg_dixons_t1\output\Dixon"))
+                        os.path.join(base_folder, f"imagen_IP_mask0{mascara_base}"))
                     ruta_grasa = buscar_archivo_nii(
                         os.path.join(base_folder, r"coreg_dixons_t1\output\Dixon_b"))
                 else:
                     ruta_ip    = buscar_archivo_nii(
-                        os.path.join(base_folder, rf"dix_coreg_con_dix_0{mascara_base}\output\Dixon"))
+                        os.path.join(base_folder, f"imagen_IP_mask0{mascara_base}"))
                     ruta_grasa = buscar_archivo_nii(
-                        os.path.join(base_folder, rf"dix_coreg_con_dix_0{mascara_base}\output\Dixon_b"))
+                        os.path.join(base_folder, rf"coreg_dixon_con_dixon0{mascara_base}\fat_result"), contiene = 'aligned')
 
-                arr_rinon  = arr_rinon_base
-                arr_pelvis = arr_pelvis_base
-                arr_cysts  = arr_cysts_base
+                img_ref_ses  = sitk.ReadImage(ruta_ip)
+                img_grasa_ref = sitk.ReadImage(ruta_grasa)
 
-                _, erosion_np   = erosion(arr_rinon, img_ref, ruta_g)
+                # ── ALINEACIÓN DE MÁSCARAS ──
+                # Para los pacientes de RESPECT_CENTER01, las imágenes originales
+                # tienen el eje Y invertido (Anterior-Posterior) respecto a las
+                # máscaras de Italia. Esto hace que salgan "boca abajo".
+                # En lugar de remuestrear (que fallaba por desajuste de Origin),
+                # flipeamos el array de la máscara directamente en el eje Y.
+                
+                # ── ALINEACIÓN DE MÁSCARAS ──
+                # Verificamos la orientación de la imagen de grasa. Si el eje Y
+                # está invertido (Direction[4] < 0), debemos flipear la máscara
+                # para que coincida. Esto ocurre en las sesiones registradas
+                # de CENTER01, pero puede no ocurrir en la sesión base (S02).
+                
+                needs_flip = img_grasa_ref.GetDirection()[4] < 0
+                
+                if needs_flip:
+                    print(f"  Flipeando máscaras en eje Y (Imagen detectada como INVERTIDA)...")
+                    arr_rinon  = np.flip(arr_rinon_base,  axis=1)
+                    arr_pelvis = np.flip(arr_pelvis_base, axis=1)
+                    arr_cysts  = np.flip(arr_cysts_base,  axis=1)
+                else:
+                    print(f"  Usando máscaras originales (Imagen detectada como DERECHA)...")
+                    arr_rinon  = arr_rinon_base
+                    arr_pelvis = arr_pelvis_base
+                    arr_cysts  = arr_cysts_base
+
+                # Usamos img_grasa_ref como referencia espacial para TODOS los
+                # outputs (erosión, PDFF, máscaras).
+                _, erosion_np   = erosion(arr_rinon, img_grasa_ref, ruta_g)
                 ruta_pdff, pdff_total = mapa_pdff(ruta_grasa, ruta_ip, ruta_g)
                 pdff_org, _     = recortar_pdff_al_organo(erosion_np, ruta_pdff, ruta_g)
 
                 par_np      = aislar_parenquima(pdff_org, erosion_np,
                                                 arr_pelvis, arr_cysts,
-                                                img_ref, ruta_g)
-                seno_np     = aislar_seno(pdff_total, arr_pelvis, img_ref, ruta_g)
+                                                img_grasa_ref, ruta_g)
+                seno_np     = aislar_seno(pdff_total, arr_pelvis, img_grasa_ref, ruta_g)
                 quistes_np  = aislar_quistes(pdff_org, erosion_np,
-                                             arr_cysts, img_ref, ruta_g)
+                                             arr_cysts, img_grasa_ref, ruta_g)
                 generar_mascara_validacion(par_np, seno_np, quistes_np,
-                                           img_ref, ruta_g)
+                                           img_grasa_ref, ruta_g)
 
                 res = estadisticas_sesion(
-                    par_np, seno_np, quistes_np, erosion_np, img_ref,
+                    par_np, seno_np, quistes_np, erosion_np, img_grasa_ref,
                     id_sujeto, cod_pac, ruta_g)
 
                 datos_pac[f"S{n_ses}"] = res

@@ -8,7 +8,8 @@ import seaborn as sns
 from itertools import combinations
 
 
-FRANCIS_DIR    = "Francis"          # carpeta con las máscaras de Francis
+FRANCIS_DIR    = "mascaras_sanos_UNAV" #carpeta con las mascaras de la UNAV
+
 SESSION_SUFFIX = {1: "v2a", 2: "v2b", 3: "v3"}
 
 
@@ -39,7 +40,6 @@ def cargar_mascaras_sesion(pac_id, n_ses):
 
 
 def mascara_base_existe(pac_id, n_ses_base):
-    """Comprueba si existe la máscara para la sesión base."""
     suf = SESSION_SUFFIX[n_ses_base]
     return os.path.exists(
         os.path.join(FRANCIS_DIR, f"{pac_id}_02_{suf}.nii.gz")
@@ -121,7 +121,6 @@ def aislar_parenquima(pdff_org, erosion_np, pelvis_np, cysts_np, img_ref, ruta_g
 
 
 def aislar_seno(pdff_total, pelvis_np, img_ref, ruta_guardado):
-    """Seno renal = toda la máscara de la pelvis/seno."""
     ruta_dir = f"resultados_{ruta_guardado}_mascara_0{mascara_base}/output_rinones"
     os.makedirs(ruta_dir, exist_ok=True)
 
@@ -136,7 +135,7 @@ def aislar_seno(pdff_total, pelvis_np, img_ref, ruta_guardado):
 
 
 def aislar_quistes(pdff_org, erosion_np, cysts_np, img_ref, ruta_guardado):
-    """Quistes dentro del riñón erosionado (vacío si no hay máscara de quistes)."""
+
     ruta_dir = f"resultados_{ruta_guardado}_mascara_0{mascara_base}/output_rinones"
     os.makedirs(ruta_dir, exist_ok=True)
 
@@ -196,7 +195,6 @@ def asignar_lado_por_posicion(shape_array):
     z_size, y_size, x_size = shape_array
     centro_x = x_size / 2.0
     
-    # Crear índices X y expandir a la forma completa (Z, Y, X)
     x_indices = np.arange(x_size)
     x_grid = np.broadcast_to(x_indices[np.newaxis, np.newaxis, :], (z_size, y_size, x_size))
     
@@ -247,7 +245,7 @@ def estadisticas_sesion(par, seno, quistes, erosion_np, img_ref,
             "Media_Quistes"      : round(_stat(vq)          if vq.size > 0 else 0, 4),
             "Mediana_Quistes"    : round(np.median(vq)      if vq.size > 0 else 0, 4),
         }
-        vals_plot[nombre] = vp.flatten()
+        vals_plot[nombre] = vp.flatten() #convertimos el array a 1D para poder hacer graficos
 
         dir_out = f"resultados_{ruta_guardado}_mascara_0{mascara_base}/output_rinones"
         _histograma(vp, f"PDFF Parénquima — {nombre} ({id_suj})",
@@ -258,7 +256,7 @@ def estadisticas_sesion(par, seno, quistes, erosion_np, img_ref,
             _histograma(vq, f"PDFF Quistes — {nombre} ({id_suj})",
                         os.path.join(dir_out, f"hist_{nombre}_quistes.png"))
 
-    # Boxplot y violinplot comparando ambos riñones
+    # Boxplot y violinplot
     if "DERECHO" in vals_plot and "IZQUIERDO" in vals_plot:
         vd, vi = vals_plot["DERECHO"], vals_plot["IZQUIERDO"]
         if vd.size > 0 and vi.size > 0:
@@ -288,21 +286,7 @@ def estadisticas_sesion(par, seno, quistes, erosion_np, img_ref,
 
     return res
 
-
-def calcular_cvws_individual(sesiones_valores):
-    valores = [sesiones_valores[s] for s in sorted(sesiones_valores)]
-    if len(valores) < 2:
-        return np.nan
-    sum_sq, n_pares = 0.0, 0
-    for i in range(len(valores)):
-        for j in range(i + 1, len(valores)):
-            sum_sq  += (valores[i] - valores[j]) ** 2
-            n_pares += 1
-    sd   = np.sqrt(sum_sq / (2 * n_pares))
-    mean = np.mean(valores)
-    return round(100 * sd / mean, 2) if mean != 0 else np.nan
-
-
+"""
 def calcular_cvws_grupo(datos_grupo):
     sum_sq_total, n_pares_total = 0.0, 0
     all_vals = []
@@ -318,6 +302,31 @@ def calcular_cvws_grupo(datos_grupo):
     sd_pooled  = np.sqrt(sum_sq_total / (2 * n_pares_total))
     grand_mean = np.mean(all_vals)
     return round(100 * sd_pooled / grand_mean, 2) if grand_mean != 0 else np.nan
+"""
+
+def calcular_cvws_dos_sesiones(datos_grupo, ses_a, ses_b):
+    
+    diferencias = []
+    todos_valores = []
+    
+    for pid, ses_vals in datos_grupo.items():
+        val_a = ses_vals.get(ses_a)
+        val_b = ses_vals.get(ses_b)
+        
+        if val_a is not None and val_b is not None:
+            diferencias.append((val_a - val_b) ** 2)
+            todos_valores.extend([val_a, val_b])
+    
+    if len(diferencias) == 0:
+        return np.nan, 0
+    
+    n = len(diferencias)
+    sum_sq = sum(diferencias)
+    sd = np.sqrt(sum_sq / (2 * n))
+    media_total = np.mean(todos_valores)
+    
+    cvws = round(100 * sd / media_total, 2) if media_total != 0 else np.nan
+    return cvws, n
 
 
 def calcular_icc_grupo(datos_grupo):
@@ -360,7 +369,9 @@ def generar_bland_altman_grupo(datos_grupo, metrica_nombre, ruta_guardado):
 
     fig, axes = plt.subplots(1, len(pares),
                              figsize=(6 * len(pares), 5),
-                             squeeze=False)
+                             squeeze=False,
+                             sharex=True,
+                             sharey=True)
     for col, (sA, sB) in enumerate(pares):
         ax = axes[0][col]
         means, diffs, labels = [], [], []
@@ -405,25 +416,6 @@ def generar_bland_altman_grupo(datos_grupo, metrica_nombre, ruta_guardado):
     plt.close()
 
 
-def calcular_bilateral(res_sesion, metricas=None):
-    if metricas is None:
-        metricas = ["Media_Parenquima", "Mediana_Parenquima",
-                    "Vol_Parenquima", "Vol_Total", "Vol_Seno"]
-    resultado = {}
-    der = res_sesion.get("DERECHO",   {})
-    izq = res_sesion.get("IZQUIERDO", {})
-    for m in metricas:
-        vd, vi = der.get(m), izq.get(m)
-        if vd is None or vi is None:
-            continue
-        resultado[m] = {
-            "der" : round(vd, 4),
-            "izq" : round(vi, 4),
-            "cvws": calcular_cvws_individual({"DER": vd, "IZQ": vi}),
-        }
-    return resultado
-
-
 def generar_excel_por_paciente(datos_sesiones_pac, paciente_id, ruta_excel):
     METRICAS = [
         "Vol_Total", "Vol_Parenquima", "Vol_Seno", "Vol_Quistes",
@@ -449,68 +441,82 @@ def generar_excel_por_paciente(datos_sesiones_pac, paciente_id, ruta_excel):
             pd.DataFrame(tabla).to_excel(
                 writer, sheet_name=f"Sesion_{ses}", index=False, header=False)
 
-        # CVws individual entre sesiones
-        METRICAS_REPRO = ["Media_Parenquima", "Mediana_Parenquima",
-                          "Vol_Parenquima", "Vol_Total", "Vol_Seno"]
-        cabecera  = ["METRICA", "LADO", "CVws (%)"] + [f"Valor {s}" for s in sesiones]
-        tabla_cv  = [
-            ["REPRODUCIBILIDAD INDIVIDUAL entre sesiones"],
-            [""],
-            cabecera,
-        ]
-        for m in METRICAS_REPRO:
-            for lado in ["DERECHO", "IZQUIERDO"]:
-                sv = {
-                    s: datos_sesiones_pac[s][lado][m]
-                    for s in sesiones
-                    if lado in datos_sesiones_pac.get(s, {})
-                    and m in datos_sesiones_pac[s][lado]
-                }
-                if len(sv) >= 2:
-                    cvws = calcular_cvws_individual(sv)
-                    tabla_cv.append(
-                        [m, lado, cvws] + [sv.get(s, "") for s in sesiones])
-        pd.DataFrame(tabla_cv).to_excel(
-            writer, sheet_name="CVws_Individual", index=False, header=False)
 
-        # Simetría bilateral
-        METRICAS_BILAT = ["Media_Parenquima", "Mediana_Parenquima",
-                          "Vol_Parenquima", "Vol_Total", "Vol_Seno"]
-        tabla_bil = [
-            ["SIMETRIA BILATERAL - DERECHO vs IZQUIERDO (por sesion)"],
-            [""],
-        ]
-        for ses in sesiones:
-            datos_ses = datos_sesiones_pac.get(ses, {})
-            if not datos_ses:
-                continue
-            bil = calcular_bilateral(datos_ses, METRICAS_BILAT)
-            tabla_bil.append([f"Sesion {ses}", "", "", ""])
-            tabla_bil.append(["METRICA", "DERECHO", "IZQUIERDO", "CVws (%)"])
-            for m in METRICAS_BILAT:
-                if m in bil:
-                    b = bil[m]
-                    tabla_bil.append([m, b["der"], b["izq"], b["cvws"]])
-            tabla_bil.append([""])
-        pd.DataFrame(tabla_bil).to_excel(
-            writer, sheet_name="Der_vs_Izq", index=False, header=False)
+def media_y_mediana_todos_datos(todos_datos, writer):
+    
+    METRICAS = ["Media_Seno", "Mediana_Seno", "Media_Parenquima", "Mediana_Parenquima"]
+    ids      = sorted(todos_datos)
+
+    for lado in ["DERECHO", "IZQUIERDO"]:
+        
+        cabecera = ["Paciente"]
+        for m in METRICAS:
+            cabecera += [f"Media_({m})", f"Mediana_({m})"]
+        filas = []
+        grupo_vals = {f"Media_({m})": [] for m in METRICAS}
+        grupo_vals.update({f"Mediana_({m})": [] for m in METRICAS})
+
+        for pid in ids:
+            fila = [pid]
+            for m in METRICAS:
+               
+                vals_sesiones = [
+                    todos_datos[pid][s][lado][m]
+                    for s in sorted(todos_datos[pid])
+                    if lado in todos_datos[pid][s] and m in todos_datos[pid][s][lado]
+                ]
+                if vals_sesiones:
+                    media_pac   = round(float(np.mean(vals_sesiones)),   4)
+                    mediana_pac = round(float(np.median(vals_sesiones)), 4)
+                else:
+                    media_pac = mediana_pac = ""
+
+                fila += [media_pac, mediana_pac]
+
+                if media_pac != "":
+                    grupo_vals[f"Media_({m})"].append(media_pac)
+                    grupo_vals[f"Mediana_({m})"].append(mediana_pac)
+
+            filas.append(fila)
+
+        filas.append([""] * len(cabecera))
+
+        fila_media_grupo = ["Media grupo"]
+        fila_mediana_grupo = ["Mediana grupo"]
+        for m in METRICAS:
+            vm = grupo_vals[f"Media_({m})"]
+            vmd = grupo_vals[f"Mediana_({m})"]
+            fila_media_grupo  += [
+                round(float(np.mean(vm)),   4) if vm  else "",
+                round(float(np.mean(vmd)),  4) if vmd else "",
+            ]
+            fila_mediana_grupo += [
+                round(float(np.median(vm)),   4) if vm  else "",
+                round(float(np.median(vmd)),  4) if vmd else "",
+            ]
+        filas.append(fila_media_grupo)
+        filas.append(fila_mediana_grupo)
+
+        pd.DataFrame(filas, columns=cabecera).to_excel(
+            writer, sheet_name=f"EstPac_{lado[:3]}", index=False)
 
 
 def generar_excel_grupo(todos_datos, ruta_excel):
-    METRICAS = ["Media_Parenquima", "Mediana_Parenquima",
-                "Vol_Parenquima", "Vol_Total", "Vol_Seno"]
+    METRICAS_DATOS = ["Media_Parenquima", "Mediana_Parenquima",
+                      "Vol_Parenquima", "Vol_Total", "Vol_Seno"]
+    METRICAS_CVws = ["Media_Parenquima", "Media_Seno", "Mediana_Parenquima", "Mediana_Seno"]  # Solo estas para CVws
     ids      = sorted(todos_datos)
     sesiones = sorted({s for p in todos_datos.values() for s in p})
 
     with pd.ExcelWriter(ruta_excel, engine="openpyxl") as writer:
 
         for lado in ["DERECHO", "IZQUIERDO"]:
-            cols  = ["Paciente"] + [f"{s}_{m}" for s in sesiones for m in METRICAS]
+            cols  = ["Paciente"] + [f"{s}_{m}" for s in sesiones for m in METRICAS_DATOS]
             filas = []
             for pid in ids:
                 fila = [pid]
                 for s in sesiones:
-                    for m in METRICAS:
+                    for m in METRICAS_DATOS:
                         fila.append(
                             todos_datos.get(pid, {}).get(s, {})
                                        .get(lado, {}).get(m, ""))
@@ -518,8 +524,10 @@ def generar_excel_grupo(todos_datos, ruta_excel):
             pd.DataFrame(filas, columns=cols).to_excel(
                 writer, sheet_name=f"Datos_{lado[:3]}", index=False)
 
-        tabla = [["METRICA", "LADO", "CVws_pooled (%)", "ICC(2,1)"]]
-        for m in METRICAS:
+        tabla = [["METRICA", "LADO", "CVws S1 vs S2 (%)", "CVws S1 vs S3 (%)", "ICC(2,1)"]]
+        n_s1_s2_final = 0
+        n_s1_s3_final = 0
+        for m in METRICAS_CVws:
             for lado in ["DERECHO", "IZQUIERDO"]:
                 grupo = {}
                 for pid in ids:
@@ -533,38 +541,53 @@ def generar_excel_grupo(todos_datos, ruta_excel):
                         grupo[pid] = sv
                 if len(grupo) < 2:
                     continue
-                tabla.append([m, lado,
-                               calcular_cvws_grupo(grupo),
-                               calcular_icc_grupo(grupo)])
+                
+                cvws_s1_s2, n_s1_s2 = calcular_cvws_dos_sesiones(grupo, "S1", "S2")
+                cvws_s1_s3, n_s1_s3 = calcular_cvws_dos_sesiones(grupo, "S1", "S3")
+                n_s1_s2_final = n_s1_s2 if n_s1_s2 > 0 else n_s1_s2_final
+                n_s1_s3_final = n_s1_s3 if n_s1_s3 > 0 else n_s1_s3_final
+                
+                icc = calcular_icc_grupo(grupo)
+                tabla.append([m, lado, cvws_s1_s2, cvws_s1_s3, icc])
+        
+        tabla.append(["", "", "", "", ""])
+        tabla.append(["Num Pacientes", "", n_s1_s2_final, n_s1_s3_final, ""])
+
         pd.DataFrame(tabla).to_excel(
             writer, sheet_name="Reproducibilidad_Grupo",
             index=False, header=False)
+
+        media_y_mediana_todos_datos(todos_datos, writer)
 
 
 if __name__ == "__main__":
 
     PACIENTES = [
-        {"id": 504, "codigo": "P504", "nombre": "Paciente 504"},
-        {"id": 506, "codigo": "P506", "nombre": "Paciente 506"},
-        {"id": 514, "codigo": "P514", "nombre": "Paciente 514"},
-        {"id": 516, "codigo": "P516", "nombre": "Paciente 516"},
-        {"id": 517, "codigo": "P517", "nombre": "Paciente 517"},
+        {"id": 501, "codigo": "P501", "nombre": "Paciente 501", "mascara_sesion": 1}, 
+        {"id": 504, "codigo": "P504", "nombre": "Paciente 504", "mascara_sesion": 2}, 
+        {"id": 506, "codigo": "P506", "nombre": "Paciente 506", "mascara_sesion": 3},
+        {"id": 507, "codigo": "P507", "nombre": "Paciente 507", "mascara_sesion": 1}, 
+        {"id": 508, "codigo": "P508", "nombre": "Paciente 508", "mascara_sesion": 2}, 
+        {"id": 510, "codigo": "P510", "nombre": "Paciente 510", "mascara_sesion": 1},
+        {"id": 511, "codigo": "P511", "nombre": "Paciente 511", "mascara_sesion": 1}, 
+        {"id": 513, "codigo": "P513", "nombre": "Paciente 513", "mascara_sesion": 2}, 
+        {"id": 514, "codigo": "P514", "nombre": "Paciente 514", "mascara_sesion": 3},
+        {"id": 516, "codigo": "P516", "nombre": "Paciente 516", "mascara_sesion": 3},
     ]
-
-    mascara_base = 3
 
     todos_datos = {}
 
     for pac in PACIENTES:
-        pac_id    = pac["id"]
-        cod_pac   = pac["codigo"]
-        id_sujeto = pac["nombre"]
-        print(f"\nProcesando paciente {pac_id} ({cod_pac})...")
+        pac_id       = pac["id"]
+        cod_pac      = pac["codigo"]
+        id_sujeto    = pac["nombre"]
+        mascara_base = pac.get("mascara_sesion", 3)  
+        print(f"\nProcesando paciente {pac_id} con máscara de sesión {mascara_base}")
 
         datos_pac = {}
 
         if not mascara_base_existe(pac_id, mascara_base):
-            print(f"  Sin máscara de la sesión base {mascara_base} en Francis — se omite.")
+            print(f"  Sin máscara de la sesión base {mascara_base}")
             continue
 
         try:
@@ -575,7 +598,6 @@ if __name__ == "__main__":
             continue
 
         for n_ses in [1, 2, 3]:
-            print(f"Sesión {n_ses}...")
             ruta_g      = f"{pac_id}_0{n_ses}"
             base_folder = f"SANOS/{pac_id}_02/0{n_ses}"
             os.makedirs(f"resultados_{ruta_g}_mascara_0{mascara_base}", exist_ok=True)
@@ -635,7 +657,7 @@ if __name__ == "__main__":
         ruta_grupo = f"resultados_grupo_mascara_0{mascara_base}"
         os.makedirs(ruta_grupo, exist_ok=True)
 
-        METRICAS_BA = ["Media_Parenquima", "Mediana_Parenquima", "Vol_Parenquima"]
+        METRICAS_BA = ["Media_Parenquima", "Mediana_Parenquima", "Media_Seno", "Mediana_Seno"]
         for lado in ["DERECHO", "IZQUIERDO"]:
             for m in METRICAS_BA:
                 grupo_m = {}
@@ -653,4 +675,3 @@ if __name__ == "__main__":
             grupo_valido,
             os.path.join(ruta_grupo, "reproducibilidad_GRUPO.xlsx"))
         print(f"Excel de grupo guardado")
-
